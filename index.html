@@ -11,7 +11,7 @@
     <!-- Leaflet.js for the map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-     crossorigin=""/>
+     crossorigin="">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
      crossorigin=""></script>
@@ -62,55 +62,30 @@
             cursor: pointer;
             border-radius: 50%;
         }
+        /* --- UPDATED: Legend Styles --- */
+        .legend {
+            padding: 10px 12px;
+            font-family: sans-serif;
+            background: rgba(31, 41, 55, 0.85); /* bg-gray-800 with opacity */
+            color: #f3f4f6; /* text-gray-200 */
+            border-radius: 5px;
+            line-height: 20px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            width: 200px;
+        }
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
     </style>
-</head>
-<body class="bg-gray-900 text-gray-200 font-sans">
-
-    <div class="container mx-auto p-4 md:p-6">
-        <header class="text-center mb-6">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">Global Solar+Battery System Performance</h1>
-            <p class="text-gray-400 mt-2">Visualize system capacity factor based on solar and battery size.</p>
-        </header>
-
-        <!-- Controls Section -->
-        <div id="controls" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
-            <div id="upload-section">
-                <label for="csv-file" class="block mb-2 text-lg font-medium text-white">1. Upload your CSV File</label>
-                <input type="file" id="csv-file" accept=".csv" class="block w-full text-sm text-gray-400
-                  file:mr-4 file:py-2 file:px-4
-                  file:rounded-full file:border-0
-                  file:text-sm file:font-semibold
-                  file:bg-blue-500 file:text-white
-                  hover:file:bg-blue-600 cursor-pointer"/>
-                <p id="status-message" class="text-gray-500 mt-2 text-sm">Please upload 'system_capacity_factors.csv'.</p>
-            </div>
-
-            <div id="sliders-section" class="mt-6 hidden">
-                 <h2 class="text-lg font-medium text-white mb-4">2. Select System Configuration</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label for="solar-slider" class="block mb-2 font-medium">Solar Capacity: <span id="solar-value" class="font-bold text-blue-400">5 GW</span></label>
-                        <input type="range" id="solar-slider" min="1" max="10" value="5" class="w-full">
-                    </div>
-                    <div>
-                        <label for="battery-slider" class="block mb-2 font-medium">Battery Capacity: <span id="battery-value" class="font-bold text-blue-400">8 GWh</span></label>
-                        <input type="range" id="battery-slider" min="1" max="15" value="8" class="w-full">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Map Container -->
-        <div id="map-container" class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-            <div id="map"></div>
-        </div>
-    </div>
-
+    
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             let map;
             let dispatchData = [];
             let circlesLayer = L.layerGroup();
+            let legend;
 
             // Initialize the map
             map = L.map('map').setView([20, 0], 2);
@@ -168,6 +143,7 @@
                             statusMessage.textContent = `Successfully loaded ${dispatchData.length} rows.`;
                             slidersSection.classList.remove('hidden');
                             updateMap();
+                            addLegend(); // Add legend after data is loaded
                         } else {
                             statusMessage.textContent = 'Failed to parse CSV or file is empty.';
                         }
@@ -220,7 +196,7 @@
                     const capacityFactor = row.System_Capacity_Factor;
                     const color = getColorForCF(capacityFactor);
 
-                    // --- CHANGE 1: Use circleMarker for consistent pixel size ---
+                    // Use circleMarker for consistent pixel size
                     const circle = L.circleMarker([lat, lon], {
                         radius: 8, // Fixed radius in pixels
                         color: color,
@@ -252,24 +228,111 @@
                 }
             }
 
-            // --- CHANGE 2: New color gradient function ---
+            // --- Rainbow color gradient function ---
             function getColorForCF(cf) {
-                if (cf < 0) cf = 0;
-                if (cf > 1) cf = 1;
+                const colors = [
+                    { p: 0.0,  color: { r: 0,   g: 0,   b: 255 } }, // Blue
+                    { p: 0.25, color: { r: 0,   g: 255, b: 255 } }, // Cyan
+                    { p: 0.5,  color: { r: 0,   g: 255, b: 0 } },   // Green
+                    { p: 0.75, color: { r: 255, g: 255, b: 0 } },   // Yellow
+                    { p: 1.0,  color: { r: 255, g: 0,   b: 0 } }    // Red
+                ];
 
-                // Define start (Baby Blue) and end (Fire Truck Red) colors
-                const startColor = { r: 137, g: 207, b: 240 }; // #89CFF0
-                const endColor = { r: 206, g: 32, b: 41 };     // #CE2029
+                if (cf <= 0) return `rgb(${colors[0].color.r}, ${colors[0].color.g}, ${colors[0].color.b})`;
+                if (cf >= 1) return `rgb(${colors[4].color.r}, ${colors[4].color.g}, ${colors[4].color.b})`;
 
-                // Linear interpolation between the two colors
-                const r = Math.round(startColor.r + cf * (endColor.r - startColor.r));
-                const g = Math.round(startColor.g + cf * (endColor.g - startColor.g));
-                const b = Math.round(startColor.b + cf * (endColor.b - startColor.b));
-                
+                let i = 1;
+                while (colors[i].p < cf) {
+                    i++;
+                }
+                const lower = colors[i - 1];
+                const upper = colors[i];
+
+                const range = upper.p - lower.p;
+                const scale = (cf - lower.p) / range;
+
+                const r = Math.round(lower.color.r + scale * (upper.color.r - lower.color.r));
+                const g = Math.round(lower.color.g + scale * (upper.color.g - lower.color.g));
+                const b = Math.round(lower.color.b + scale * (upper.color.b - lower.color.b));
+
                 return `rgb(${r},${g},${b})`;
+            }
+
+            // --- UPDATED: Function to add a continuous gradient legend ---
+            function addLegend() {
+                if (legend) {
+                    map.removeControl(legend);
+                }
+                legend = L.control({position: 'bottomright'});
+
+                legend.onAdd = function (map) {
+                    const div = L.DomUtil.create('div', 'info legend');
+                    div.innerHTML = '<strong>System CF</strong>';
+
+                    const gradient = L.DomUtil.create('div', '', div);
+                    const gradientColors = [];
+                    for (let i = 0; i <= 100; i++) {
+                        gradientColors.push(getColorForCF(i / 100));
+                    }
+                    gradient.style.height = '20px';
+                    gradient.style.marginTop = '5px';
+                    gradient.style.marginBottom = '5px';
+                    gradient.style.width = '100%';
+                    gradient.style.background = `linear-gradient(to right, ${gradientColors.join(',')})`;
+                    gradient.style.borderRadius = '3px';
+
+                    const labels = L.DomUtil.create('div', 'legend-labels', div);
+                    labels.innerHTML = '<span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>';
+
+                    return div;
+                };
+
+                legend.addTo(map);
             }
         });
     </script>
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans">
+
+    <div class="container mx-auto p-4 md:p-6">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Global Solar+Battery System Performance</h1>
+            <p class="text-gray-400 mt-2">Visualize system capacity factor based on solar and battery size.</p>
+        </header>
+
+        <!-- Controls Section -->
+        <div id="controls" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+            <div id="upload-section">
+                <label for="csv-file" class="block mb-2 text-lg font-medium text-white">1. Upload your CSV File</label>
+                <input type="file" id="csv-file" accept=".csv" class="block w-full text-sm text-gray-400
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-full file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-blue-500 file:text-white
+                  hover:file:bg-blue-600 cursor-pointer">
+                <p id="status-message" class="text-gray-500 mt-2 text-sm">Please upload 'system_capacity_factors.csv'.</p>
+            </div>
+
+            <div id="sliders-section" class="mt-6 hidden">
+                 <h2 class="text-lg font-medium text-white mb-4">2. Select System Configuration</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="solar-slider" class="block mb-2 font-medium">Solar Capacity: <span id="solar-value" class="font-bold text-blue-400">5 GW</span></label>
+                        <input type="range" id="solar-slider" min="1" max="10" value="5" class="w-full">
+                    </div>
+                    <div>
+                        <label for="battery-slider" class="block mb-2 font-medium">Battery Capacity: <span id="battery-value" class="font-bold text-blue-400">8 GWh</span></label>
+                        <input type="range" id="battery-slider" min="1" max="15" value="8" class="w-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div id="map-container" class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div id="map"></div>
+        </div>
+    </div>
 
 </body>
 </html>
