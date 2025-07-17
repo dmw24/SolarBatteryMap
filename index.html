@@ -1,1 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solar & Battery Map</title>
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+e2a9oFk0zqWMI3QuPJD9Et3xiQm5OYsK6Cq9aMMw="
+    crossorigin=""
+  />
+  <style>
+    body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    #controls { padding: 10px; background: #f7f7f7; }
+    #map { height: calc(100vh - 60px); }
+    label { margin-right: 10px; }
+    input[type=range] { vertical-align: middle; }
+    span.value { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <label>
+      Solar:
+      <input type="range" id="solarSlider" min="1" max="10" value="1" />
+      <span id="solarVal" class="value">1</span>
+    </label>
+    <label>
+      Battery:
+      <input type="range" id="batterySlider" min="1" max="15" value="1" />
+      <span id="batteryVal" class="value">1</span>
+    </label>
+  </div>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-o9N1jEJoeXtWm/AzUWJoD0SiE2Gk47PTZ5F5sJ0X+RI="
+    crossorigin=""
+  ></script>
+  <script>
+    // Sample data: Location, Solar_GW, Battery_GWh, System_Capacity_Factor
+    const data = [
+      { loc: 'Lat-69.3_Lon100.7', solar: 1, battery: 1, scf: 0.21579751253887666 },
+      { loc: 'Lat-69.3_Lon100.7', solar: 1, battery: 2, scf: 0.21579751253887666 },
+      { loc: 'Lat-69.3_Lon100.7', solar: 1, battery: 3, scf: 0.21579751253887666 },
+      // ... more rows ...
+    ];
+
+    // Parse lat/lon strings
+    data.forEach(d => {
+      const parts = d.loc.match(/Lat-?([\d.]+)_Lon-?([\d.]+)/);
+      d.lat = parseFloat(parts[1]);
+      d.lon = parseFloat(parts[2]);
+    });
+
+    // Create map
+    const map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // Layer group for markers
+    const markers = L.layerGroup().addTo(map);
+
+    // Color function: blue (low) to red (high)
+    function getColor(val) {
+      // val assumed between 0 and 1
+      const hue = (1 - val) * 240; // 240 = blue, 0 = red
+      return `hsl(${hue}, 100%, 50%)`;
+    }
+
+    // Update markers based on sliders
+    function updateMarkers() {
+      const solarSel = +document.getElementById('solarSlider').value;
+      const batterySel = +document.getElementById('batterySlider').value;
+
+      document.getElementById('solarVal').textContent = solarSel;
+      document.getElementById('batteryVal').textContent = batterySel;
+
+      markers.clearLayers();
+
+      const subset = data.filter(d => d.solar === solarSel && d.battery === batterySel);
+      subset.forEach(d => {
+        L.circleMarker([d.lat, d.lon], {
+          radius: 8,
+          fillColor: getColor(d.scf),
+          color: '#000',
+          weight: 1,
+          opacity: 1,
+          fillOpacity: 0.8
+        }).addTo(markers)
+          .bindPopup(`Location: ${d.loc}<br>SCF: ${d.scf.toFixed(3)}`);
+      });
+
+      // Zoom to markers bounds if any
+      if (subset.length) {
+        const group = subset.map(d => [d.lat, d.lon]);
+        map.fitBounds(group, { padding: [20, 20] });
+      }
+    }
+
+    // Attach event listeners
+    document.getElementById('solarSlider').addEventListener('input', updateMarkers);
+    document.getElementById('batterySlider').addEventListener('input', updateMarkers);
+
+    // Initial draw
+    updateMarkers();
+  </script>
+</body>
+</html>
 
