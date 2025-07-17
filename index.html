@@ -1,99 +1,275 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Solar & Battery Map</title>
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
-    #controls { padding: 10px; background: #f7f7f7; }
-    label { margin-right: 15px; }
-    input[type=range] { vertical-align: middle; }
-    span.value { font-weight: bold; margin-left: 5px; }
-    #map { height: 90vh; width: 100%; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Solar+Battery Dispatch Map</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet.js for the map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+
+    <style>
+        /* Set a height for the map container */
+        #map { height: 75vh; }
+        /* Custom styles for Leaflet popups */
+        .leaflet-popup-content-wrapper {
+            background-color: #1f2937; /* bg-gray-800 */
+            color: #f3f4f6; /* text-gray-200 */
+            border-radius: 0.5rem;
+        }
+        .leaflet-popup-tip {
+            background: #1f2937;
+        }
+        .leaflet-popup-content {
+            margin: 12px 18px;
+        }
+        /* Style for sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #4b5563; /* bg-gray-600 */
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        input[type=range]:hover {
+            opacity: 1;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6; /* bg-blue-500 */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        input[type=range]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6; /* bg-blue-500 */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+    </style>
 </head>
-<body>
-  <div id="controls">
-    <label for="solarSlider">
-      Solar:
-      <input type="range" id="solarSlider" min="1" max="10" step="1" value="1" />
-      <span id="solarVal" class="value">1</span>
-    </label>
-    <label for="batterySlider">
-      Battery:
-      <input type="range" id="batterySlider" min="1" max="15" step="1" value="1" />
-      <span id="batteryVal" class="value">1</span>
-    </label>
-  </div>
-  <div id="map"></div>
+<body class="bg-gray-900 text-gray-200 font-sans">
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    // Sample data: Location, Solar_GW, Battery_GWh, System_Capacity_Factor
-    const data = [
-      { loc: 'Lat-69.3_Lon100.7', solar: 1, battery: 1, scf: 0.21579751253887666 },
-      { loc: 'Lat-69.3_Lon100.7', solar: 1, battery: 2, scf: 0.21579751253887666 },
-      { loc: 'Lat-69.3_Lon100.7', solar: 1, battery: 3, scf: 0.21579751253887666 }
-      // ... add full dataset here ...
-    ];
+    <div class="container mx-auto p-4 md:p-6">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Global Solar+Battery System Performance</h1>
+            <p class="text-gray-400 mt-2">Visualize system capacity factor based on solar and battery size.</p>
+        </header>
 
-    // Parse lat/lon strings
-    data.forEach(d => {
-      const parts = /Lat-?([\d.]+)_Lon-?([\d.]+)/.exec(d.loc);
-      d.lat = parseFloat(parts[1]);
-      d.lon = parseFloat(parts[2]);
-    });
+        <!-- Controls Section -->
+        <div id="controls" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+            <div id="upload-section">
+                <label for="csv-file" class="block mb-2 text-lg font-medium text-white">1. Upload your CSV File</label>
+                <input type="file" id="csv-file" accept=".csv" class="block w-full text-sm text-gray-400
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-full file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-blue-500 file:text-white
+                  hover:file:bg-blue-600 cursor-pointer"/>
+                <p id="status-message" class="text-gray-500 mt-2 text-sm">Please upload 'system_capacity_factors.csv'.</p>
+            </div>
 
-    // Initialize map
-    const map = L.map('map').setView([20, 0], 2);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
+            <div id="sliders-section" class="mt-6 hidden">
+                 <h2 class="text-lg font-medium text-white mb-4">2. Select System Configuration</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="solar-slider" class="block mb-2 font-medium">Solar Capacity: <span id="solar-value" class="font-bold text-blue-400">5 GW</span></label>
+                        <input type="range" id="solar-slider" min="1" max="10" value="5" class="w-full">
+                    </div>
+                    <div>
+                        <label for="battery-slider" class="block mb-2 font-medium">Battery Capacity: <span id="battery-value" class="font-bold text-blue-400">8 GWh</span></label>
+                        <input type="range" id="battery-slider" min="1" max="15" value="8" class="w-full">
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    // Layer group for markers
-    const markers = L.layerGroup().addTo(map);
+        <!-- Map Container -->
+        <div id="map-container" class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div id="map"></div>
+        </div>
+    </div>
 
-    // Color: blue (low) to red (high)
-    function getColor(val) {
-      const hue = (1 - val) * 240; // 240 = blue, 0 = red
-      return `hsl(${hue}, 100%, 50%)`;
-    }
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let map;
+            let dispatchData = [];
+            let circlesLayer = L.layerGroup();
 
-    // Draw markers based on slider values
-    function updateMarkers() {
-      const solarSel = Number(document.getElementById('solarSlider').value);
-      const batterySel = Number(document.getElementById('batterySlider').value);
-      document.getElementById('solarVal').textContent = solarSel;
-      document.getElementById('batteryVal').textContent = batterySel;
-      markers.clearLayers();
-      const subset = data.filter(d => d.solar === solarSel && d.battery === batterySel);
-      subset.forEach(d => {
-        L.circleMarker([d.lat, d.lon], {
-          radius: 8,
-          fillColor: getColor(d.scf),
-          color: '#000',
-          weight: 1,
-          fillOpacity: 0.8
-        }).addTo(markers)
-          .bindPopup(`<strong>${d.loc}</strong><br>SCF: ${d.scf.toFixed(3)}`);
-      });
-      if (subset.length) {
-        const bounds = subset.map(d => [d.lat, d.lon]);
-        map.fitBounds(bounds, { padding: [20, 20] });
-      }
-    }
+            // Initialize the map
+            map = L.map('map').setView([20, 0], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+            circlesLayer.addTo(map);
 
-    // Hook slider events
-    document.getElementById('solarSlider').addEventListener('input', updateMarkers);
-    document.getElementById('batterySlider').addEventListener('input', updateMarkers);
+            const fileInput = document.getElementById('csv-file');
+            const solarSlider = document.getElementById('solar-slider');
+            const batterySlider = document.getElementById('battery-slider');
+            const solarValueLabel = document.getElementById('solar-value');
+            const batteryValueLabel = document.getElementById('battery-value');
+            const statusMessage = document.getElementById('status-message');
+            const slidersSection = document.getElementById('sliders-section');
 
-    // Initial render
-    updateMarkers();
-  </script>
+            // --- Vanilla JavaScript CSV Parser ---
+            function parseCSV(text) {
+                const lines = text.trim().split('\n');
+                if (lines.length < 2) return [];
+
+                const header = lines[0].split(',').map(h => h.trim());
+                const data = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',');
+                    if (values.length !== header.length) continue;
+
+                    const entry = {};
+                    for (let j = 0; j < header.length; j++) {
+                        const value = values[j].trim();
+                        const numValue = parseFloat(value);
+                        entry[header[j]] = isNaN(numValue) ? value : numValue;
+                    }
+                    data.push(entry);
+                }
+                return data;
+            }
+
+            // Event listener for file upload
+            fileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                statusMessage.textContent = `Loading ${file.name}...`;
+                const reader = new FileReader();
+
+                reader.onload = (e) => {
+                    try {
+                        const text = e.target.result;
+                        dispatchData = parseCSV(text);
+                        if (dispatchData.length > 0) {
+                            statusMessage.textContent = `Successfully loaded ${dispatchData.length} rows.`;
+                            slidersSection.classList.remove('hidden');
+                            updateMap();
+                        } else {
+                            statusMessage.textContent = 'Failed to parse CSV or file is empty.';
+                        }
+                    } catch (err) {
+                        statusMessage.textContent = `Error processing file: ${err.message}`;
+                        console.error("File processing error:", err);
+                    }
+                };
+
+                reader.onerror = () => {
+                    statusMessage.textContent = 'Error reading the file.';
+                };
+
+                reader.readAsText(file);
+            });
+
+            // Event listeners for sliders
+            solarSlider.addEventListener('input', () => {
+                solarValueLabel.textContent = `${solarSlider.value} GW`;
+                updateMap();
+            });
+
+            batterySlider.addEventListener('input', () => {
+                batteryValueLabel.textContent = `${batterySlider.value} GWh`;
+                updateMap();
+            });
+
+            function updateMap() {
+                if (dispatchData.length === 0 || !map) return;
+
+                circlesLayer.clearLayers();
+
+                const selectedSolar = parseInt(solarSlider.value);
+                const selectedBattery = parseInt(batterySlider.value);
+
+                const filteredData = dispatchData.filter(row => 
+                    row.Solar_GW === selectedSolar && row.Battery_GWh === selectedBattery
+                );
+
+                if (filteredData.length === 0) {
+                    statusMessage.textContent = `No data found for ${selectedSolar} GW Solar and ${selectedBattery} GWh Battery.`;
+                    return;
+                }
+                statusMessage.textContent = `Displaying ${filteredData.length} locations for ${selectedSolar} GW Solar and ${selectedBattery} GWh Battery.`;
+                
+                filteredData.forEach(row => {
+                    const { lat, lon } = parseLocation(row.Location);
+                    if (lat === null || lon === null) return;
+
+                    const capacityFactor = row.System_Capacity_Factor;
+                    const color = getColorForCF(capacityFactor);
+
+                    // --- CHANGE 1: Use circleMarker for consistent pixel size ---
+                    const circle = L.circleMarker([lat, lon], {
+                        radius: 8, // Fixed radius in pixels
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.7,
+                        weight: 1 // Border weight
+                    }).addTo(circlesLayer);
+
+                    circle.bindTooltip(`
+                        <div style="font-family: sans-serif;">
+                            <strong>Location:</strong> ${lat.toFixed(2)}, ${lon.toFixed(2)}<br>
+                            <strong>System CF:</strong> ${(capacityFactor * 100).toFixed(2)}%
+                        </div>
+                    `);
+                });
+            }
+
+            function parseLocation(locationString) {
+                if (typeof locationString !== 'string') return { lat: null, lon: null };
+                const parts = locationString.split('_');
+                if (parts.length !== 2) return { lat: null, lon: null };
+                try {
+                    const lat = parseFloat(parts[0].replace('Lat', ''));
+                    const lon = parseFloat(parts[1].replace('Lon', ''));
+                    return { lat, lon };
+                } catch (e) {
+                    console.error(`Could not parse location: ${locationString}`);
+                    return { lat: null, lon: null };
+                }
+            }
+
+            // --- CHANGE 2: New color gradient function ---
+            function getColorForCF(cf) {
+                if (cf < 0) cf = 0;
+                if (cf > 1) cf = 1;
+
+                // Define start (Baby Blue) and end (Fire Truck Red) colors
+                const startColor = { r: 137, g: 207, b: 240 }; // #89CFF0
+                const endColor = { r: 206, g: 32, b: 41 };     // #CE2029
+
+                // Linear interpolation between the two colors
+                const r = Math.round(startColor.r + cf * (endColor.r - startColor.r));
+                const g = Math.round(startColor.g + cf * (endColor.g - startColor.g));
+                const b = Math.round(startColor.b + cf * (endColor.b - startColor.b));
+                
+                return `rgb(${r},${g},${b})`;
+            }
+        });
+    </script>
+
 </body>
 </html>
