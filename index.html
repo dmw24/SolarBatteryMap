@@ -159,8 +159,9 @@
             let legend;
             let worldGeoJSON;
 
-            // Base URL for the CSV files (replace with your actual GitHub repo path if different)
-            const GITHUB_RAW_BASE_URL = 'https://raw.githubusercontent.com/datasets/energy-data/main/'; 
+            // Dynamically determine the base URL for the CSV files
+            // This assumes the HTML file and CSVs are in the same directory on GitHub raw content.
+            const GITHUB_RAW_BASE_URL = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
             const csvFiles = ['data_pt1.csv', 'data_pt2.csv', 'data_pt3.csv'];
 
             const statusMessage = document.getElementById('status-message');
@@ -206,7 +207,7 @@
 
             } catch (e) {
                 console.error("Error loading data:", e);
-                statusMessage.textContent = `Error loading data: ${e.message}. Please check file paths.`;
+                statusMessage.textContent = `Error loading data: ${e.message}. Please ensure the CSV files are in the same directory as this HTML file on GitHub.`;
                 return;
             }
 
