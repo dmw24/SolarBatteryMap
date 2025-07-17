@@ -1,13 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Energy System Performance Map</title>
-    
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Baseload Renewables - Global Energy System Performance Map</title>
+
     <!-- Leaflet.js for the map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
@@ -19,58 +16,289 @@
     <!-- D3.js for the Voronoi heatmap -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
+    <!-- Chart.js + PapaParse + Tippy.js (Included for styling consistency, not fully integrated with map logic) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
+    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css"/>
+
     <style>
-        /* Set a height for the map container */
-        #map { height: 75vh; }
-        /* Custom styles for Leaflet popups */
+        /* Define CSS Variables */
+        :root {
+            --slate-blue: #192238;
+            --off-white: #eceff5;
+            --white: #fff;
+            --grey-blue: #d6dbe9;
+            --dark-grey: #959aa7;
+            --color_theme_accent: #13ce74;
+            --background_pop_darken: #11b767;
+        }
+
+        /* Global Styles */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #f7f7f7; /* VERY LIGHT gray background */
+            color: var(--slate-blue);
+            font-family: 'Poppins', sans-serif; /* Using Poppins as per example */
+            font-size: 15px;
+            line-height: 23px;
+            margin: 0;
+        }
+
+        /* HEADER */
+        header.container {
+            padding-bottom: 0.5rem;
+            background: var(--white);
+            border-bottom: 1px solid var(--grey-blue);
+            margin-bottom: 1rem;
+        }
+        header.container h1 {
+            margin: 20px 0;
+            font-size: 3.2em;
+            font-weight: 500;
+            line-height: 1.2em;
+            position: relative;
+        }
+        header.container h1::before {
+            content: "";
+            display: inline-block;
+            width: 6px;
+            height: 1em;
+            background: var(--color_theme_accent);
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        header.container p.disclaimer {
+            font-size: 0.9em;
+            color: var(--dark-grey);
+            margin: 0 0 1rem 0;
+        }
+
+        /* Container around everything */
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            background: var(--white);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+
+        /* The main layout: sidebar + content */
+        .sim-container {
+            display: flex;
+            gap: 20px;
+            height: auto; /* Let content scroll if needed */
+        }
+
+        /* SIDEBAR */
+        #sidebar {
+            width: 320px;
+            background: var(--white);
+            padding: 1rem;
+            padding-bottom: 30px;
+            border: 1px solid var(--grey-blue);
+            border-right: none;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        /* Content area */
+        #content {
+            flex-grow: 1;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--grey-blue);
+            border-radius: 8px;
+        }
+
+        /* Chart grid (adapted for map) */
+        #chartSection {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        /* Each chart box (adapted for map) */
+        .chart-box {
+            background: var(--white);
+            border: 1px solid var(--grey-blue);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .chart-box h3 {
+            margin-top: 0;
+        }
+        /* Map specific height */
+        #map {
+            display: block;
+            width: 100%;
+            height: 500px; /* Adjusted height for better fit in the new layout */
+        }
+
+        /* Fieldset / form inputs */
+        fieldset {
+            margin-bottom: 20px;
+            border: 1px solid var(--grey-blue); /* Added border to fieldset */
+            padding: 15px; /* Added padding to fieldset */
+            border-radius: 5px; /* Added border-radius to fieldset */
+        }
+        fieldset legend {
+            border-left: 4px solid var(--color_theme_accent);
+            padding-left: 8px;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            font-weight: bold; /* Make legend bolder */
+        }
+        fieldset label {
+            border-left: 2px solid var(--grey-blue);
+            padding-left: 5px;
+            margin-bottom: 5px;
+            display: block;
+            font-weight: 600;
+        }
+        input[type="number"],
+        input[type="range"], /* Apply to range inputs too */
+        select {
+            width: 100%;
+            padding: 0.4rem;
+            border: 1px solid var(--grey-blue);
+            border-radius: 4px;
+            font-size: 0.95rem;
+            background: var(--off-white); /* Slightly off-white background for inputs */
+            color: var(--slate-blue);
+            margin-bottom: 10px; /* Spacing below inputs */
+        }
+
+        /* Collapsible group toggles */
+        #sidebar h2 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.8em;
+            font-weight: 500;
+            border-bottom: 1px solid var(--grey-blue);
+            padding-bottom: 0.5rem;
+        }
+        .group-title {
+            margin: 15px 0 10px 0;
+            font-size: 1.5em;
+            font-weight: 500;
+            cursor: pointer;
+            color: var(--slate-blue); /* Ensure title color is consistent */
+        }
+        .group-title::before {
+            content: "";
+            display: inline-block;
+            width: 6px;
+            height: 1.2em;
+            background: var(--color_theme_accent);
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .group-title::after {
+            content: "►";
+            float: right;
+            font-size: 0.8em;
+            vertical-align: middle;
+            transition: transform 0.2s ease-in-out; /* Smooth arrow transition */
+        }
+        .group-title.expanded::after {
+            content: "▼";
+            transform: rotate(0deg); /* Reset rotation for expanded */
+        }
+        .group-title.collapsed::after {
+            transform: rotate(90deg); /* Rotate for collapsed */
+        }
+        .group .group-content {
+            display: none; /* Controlled by JS */
+            margin-top: 10px;
+            margin-bottom: 20px;
+            padding-left: 0;
+        }
+        .group {
+            margin-bottom: 20px;
+            border: 1px solid var(--grey-blue); /* Border for the group itself */
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        /* The "Run Model" button (removed from HTML, but keeping style for reference if needed) */
+        /*
+        #runModelBtn {
+            width: 100%;
+            padding: 10px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--color_theme_accent);
+            color: var(--slate-blue);
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        #runModelBtn:hover {
+            background-color: var(--background_pop_darken);
+        }
+        */
+
+        /* Responsive tweak for narrower screens */
+        @media screen and (max-width: 767px) {
+            .sim-container {
+                flex-direction: column;
+                height: auto;
+            }
+            #sidebar {
+                width: 100%;
+                border-right: 1px solid var(--grey-blue); /* Keep border on all sides for mobile */
+                border-bottom: 1px solid var(--grey-blue);
+            }
+        }
+
+        /* FOOTER */
+        footer {
+            position: relative; /* Changed to relative to avoid fixed positioning issues with content */
+            width: 100%;
+            background: var(--white);
+            border-top: 1px solid var(--grey-blue);
+            text-align: center;
+            padding: 10px;
+            font-size: 0.8em;
+            color: var(--dark-grey);
+            margin-top: 20px; /* Add some space above the footer */
+        }
+        footer strong {
+            font-weight: bold;
+        }
+
+        /* Leaflet popup overrides for new theme */
         .leaflet-popup-content-wrapper {
-            background-color: #1f2937; /* bg-gray-800 */
-            color: #f3f4f6; /* text-gray-200 */
+            background-color: var(--slate-blue); /* Dark background */
+            color: var(--off-white); /* Light text */
             border-radius: 0.5rem;
         }
         .leaflet-popup-tip {
-            background: #1f2937;
+            background: var(--slate-blue);
         }
         .leaflet-popup-content {
             margin: 12px 18px;
         }
-        /* Style for sliders */
-        input[type=range] {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 100%;
-            height: 8px;
-            background: #4b5563; /* bg-gray-600 */
-            border-radius: 5px;
-            outline: none;
-            opacity: 0.7;
-            transition: opacity .2s;
-        }
-        input[type=range]:hover {
-            opacity: 1;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            background: #3b82f6; /* bg-blue-500 */
-            cursor: pointer;
-            border-radius: 50%;
-        }
-        input[type=range]::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            background: #3b82f6; /* bg-blue-500 */
-            cursor: pointer;
-            border-radius: 50%;
-        }
-        /* Legend Styles */
+
+        /* Legend Styles (adjusted for new theme) */
         .legend {
             padding: 10px 12px;
-            font-family: sans-serif;
-            background: rgba(31, 41, 55, 0.85);
-            color: #f3f4f6;
+            font-family: 'Poppins', sans-serif;
+            background: rgba(var(--slate-blue), 0.85); /* Use CSS var with opacity */
+            color: var(--off-white);
             border-radius: 5px;
             line-height: 20px;
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
@@ -88,69 +316,156 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-200 font-sans">
+<body>
+    <!-- HEADER -->
+    <header class="container">
+        <h1>Baseload Renewables</h1>
+        <p class="disclaimer">
+            This tool visualizes global energy system performance, specifically focusing on "System Capacity Factor" and "Levelized Cost of Energy (LCOE)".
+            Data is loaded automatically from CSV files in the same repository.
+        </p>
+    </header>
 
-    <div class="container mx-auto p-4 md:p-6">
-        <header class="text-center mb-6">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">Global Energy System Performance</h1>
-            <p class="text-gray-400 mt-2">Visualize system capacity factor based on system mix or LCOE.</p>
-        </header>
+    <!-- MAIN LAYOUT WRAPPER -->
+    <div class="container sim-container">
+        <!-- SIDEBAR with input parameters -->
+        <div id="sidebar">
+            <h2>Model Parameters</h2>
 
-        <!-- Controls Section -->
-        <div id="controls" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
-            <!-- Removed upload section as data is now loaded directly -->
-            <div id="status-display">
-                <p id="status-message" class="text-gray-500 mt-2 text-sm">Loading energy data...</p>
+            <!-- Status Message Display -->
+            <div id="status-display" class="mb-4">
+                <p id="status-message" class="text-sm text-gray-700">Loading energy data...</p>
             </div>
 
-            <div id="sliders-section" class="mt-6 hidden">
-                 <h2 class="text-lg font-medium text-white mb-4">2. Select Visualization Mode</h2>
-                <div class="flex items-center space-x-6 mb-4 border-b border-gray-700 pb-4">
-                    <div>
-                        <input type="radio" id="mode-mix" name="vis-mode" value="mix" checked class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
-                        <label for="mode-mix" class="ml-2">By System Mix</label>
-                    </div>
-                    <div>
-                        <input type="radio" id="mode-lcoe" name="vis-mode" value="lcoe" class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
-                        <label for="mode-lcoe" class="ml-2">By Max LCOE</label>
-                    </div>
-                </div>
+            <!-- Group: System Configuration & Visualization -->
+            <div class="group" id="system-config-group">
+                <h3 class="group-title" onclick="toggleGroup(this)">System Configuration & Visualization</h3>
+                <div class="group-content">
+                    <fieldset>
+                        <legend>Select Mode</legend>
+                        <div class="flex items-center space-x-4 mb-4">
+                            <div>
+                                <input type="radio" id="mode-mix" name="vis-mode" value="mix" checked class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                                <label for="mode-mix" class="ml-2 inline">By System Mix</label>
+                            </div>
+                            <div>
+                                <input type="radio" id="mode-lcoe" name="vis-mode" value="lcoe" class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                                <label for="mode-lcoe" class="ml-2 inline">By Max LCOE</label>
+                            </div>
+                        </div>
+                    </fieldset>
 
-                <!-- Sliders for "By System Mix" mode -->
-                <div id="mix-sliders-section">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <fieldset id="mix-sliders-section">
+                        <legend>Capacity (By System Mix)</legend>
                         <div>
-                            <label for="solar-slider" class="block mb-2 font-medium">Solar Capacity: <span id="solar-value" class="font-bold text-blue-400">1 GW</span></label>
-                            <input type="range" id="solar-slider" min="0" max="10" value="1" class="w-full">
+                            <label for="solar-slider" class="block mb-2 font-medium">Solar Capacity (GW): <span id="solar-value" class="font-bold">1 GW</span></label>
+                            <input type="range" id="solar-slider" min="0" max="10" value="1" step="1" data-tippy-content="Select solar capacity in Gigawatts.">
                         </div>
                         <div>
-                            <label for="wind-slider" class="block mb-2 font-medium">Wind Capacity: <span id="wind-value" class="font-bold text-blue-400">0 GW</span></label>
-                            <input type="range" id="wind-slider" min="0" max="4" value="0" class="w-full">
+                            <label for="wind-slider" class="block mb-2 font-medium">Wind Capacity (GW): <span id="wind-value" class="font-bold">0 GW</span></label>
+                            <input type="range" id="wind-slider" min="0" max="4" value="0" step="1" data-tippy-content="Select wind capacity in Gigawatts.">
                         </div>
                         <div>
-                            <label for="battery-slider" class="block mb-2 font-medium">Battery Capacity: <span id="battery-value" class="font-bold text-blue-400">0 GWh</span></label>
-                            <input type="range" id="battery-slider" min="0" max="15" value="0" class="w-full">
+                            <label for="battery-slider" class="block mb-2 font-medium">Battery Capacity (GWh): <span id="battery-value" class="font-bold">0 GWh</span></label>
+                            <input type="range" id="battery-slider" min="0" max="15" value="0" step="1" data-tippy-content="Select battery storage capacity in Gigawatt-hours.">
                         </div>
-                    </div>
-                </div>
+                    </fieldset>
 
-                <!-- Slider for "By Max LCOE" mode -->
-                <div id="lcoe-slider-section" class="hidden">
-                     <div>
-                        <label for="lcoe-slider" class="block mb-2 font-medium">Max LCOE: <span id="lcoe-value" class="font-bold text-blue-400">$100 / MWh</span></label>
-                        <input type="range" id="lcoe-slider" min="20" max="200" value="100" class="w-full">
-                    </div>
+                    <fieldset id="lcoe-slider-section" class="hidden">
+                        <legend>Max LCOE</legend>
+                        <div>
+                            <label for="lcoe-slider" class="block mb-2 font-medium">Max LCOE ($/MWh): <span id="lcoe-value" class="font-bold">$100 / MWh</span></label>
+                            <input type="range" id="lcoe-slider" min="20" max="200" value="100" step="1" data-tippy-content="Set the maximum Levelized Cost of Energy (LCOE) to filter locations.">
+                        </div>
+                    </fieldset>
+                </div>
+            </div>
+
+            <!-- Group: Assumptions -->
+            <div class="group">
+                <h3 class="group-title" onclick="toggleGroup(this)">Assumptions</h3>
+                <div class="group-content">
+                    <fieldset>
+                        <legend>Capital Costs</legend>
+                        <label for="solarCapex">Solar Capex (USD/kW):</label>
+                        <input type="number" id="solarCapex" value="600" step="1" />
+
+                        <label for="windCapex">Wind Capex (USD/kW):</label>
+                        <input type="number" id="windCapex" value="1300" step="1" />
+
+                        <label for="batteryCapex">Battery Capex (USD/kWh):</label>
+                        <input type="number" id="batteryCapex" value="120" step="1" />
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Annual O&amp;M Costs</legend>
+                        <label for="solarOpexPercent">Solar O&M (% of CAPEX):</label>
+                        <input type="number" id="solarOpexPercent" value="1" step="0.1" />
+
+                        <label for="windOpexPercent">Wind O&M (% of CAPEX):</label>
+                        <input type="number" id="windOpexPercent" value="2.5" step="0.1" />
+
+                        <label for="batteryOpexPercent">Battery O&M (% of CAPEX):</label>
+                        <input type="number" id="batteryOpexPercent" value="2" step="0.1" />
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Financial & Other</legend>
+                        <label for="wacc">WACC (%):</label>
+                        <input type="number" id="wacc" value="6" step="0.1" />
+
+                        <label for="lifetimeSolar">Lifetime (solar) (years):</label>
+                        <input type="number" id="lifetimeSolar" value="30" step="1" />
+                        
+                        <label for="lifetimeWind">Lifetime (wind) (years):</label>
+                        <input type="number" id="lifetimeWind" value="25" step="1" />
+
+                        <label for="lifetimeBattery">Lifetime (battery) (years):</label>
+                        <input type="number" id="lifetimeBattery" value="20" step="1" />
+
+                        <label>Demand (GW): 1.0 (fixed)</label>
+                        <label>Hours per Year: 8760 (fixed)</label>
+                    </fieldset>
                 </div>
             </div>
         </div>
 
-        <!-- Map Container -->
-        <div id="map-container" class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-            <div id="map"></div>
+        <!-- CONTENT area with map -->
+        <div id="content">
+            <div id="chartSection">
+                <!-- Map Container -->
+                <div class="chart-box">
+                    <h3>Global Performance Map</h3>
+                    <div id="map"></div>
+                </div>
+            </div>
         </div>
     </div>
 
+    <!-- FOOTER -->
+    <footer>
+        Created by <strong>Daan Walter</strong>, 2025
+    </footer>
+
     <script>
+        // Chart.js defaults (kept for consistency, not directly used by map)
+        Chart.defaults.font.family = 'Poppins', 'sans-serif';
+        Chart.defaults.font.size = 15;
+
+        // Toggle group content display on click
+        function toggleGroup(el) {
+            const content = el.nextElementSibling;
+            if (content.style.display === "none" || content.style.display === "") {
+                content.style.display = "block";
+                el.classList.remove("collapsed");
+                el.classList.add("expanded");
+            } else {
+                content.style.display = "none";
+                el.classList.remove("expanded");
+                el.classList.add("collapsed");
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             let map;
             let dispatchData = [];
@@ -165,7 +480,26 @@
             const csvFiles = ['data_pt1.csv', 'data_pt2.csv', 'data_pt3.csv'];
 
             const statusMessage = document.getElementById('status-message');
-            const slidersSection = document.getElementById('sliders-section');
+            // This now refers to the main "System Configuration & Visualization" group
+            const systemConfigGroup = document.getElementById('system-config-group'); 
+
+            // Get references to sliders and labels
+            const solarSlider = document.getElementById('solar-slider');
+            const windSlider = document.getElementById('wind-slider');
+            const batterySlider = document.getElementById('battery-slider');
+            const lcoeSlider = document.getElementById('lcoe-slider');
+            const solarValueLabel = document.getElementById('solar-value');
+            const windValueLabel = document.getElementById('wind-value');
+            const batteryValueLabel = document.getElementById('battery-value');
+            const lcoeValueLabel = document.getElementById('lcoe-value');
+            
+            const modeMixRadio = document.getElementById('mode-mix');
+            const modeLcoeRadio = document.getElementById('mode-lcoe');
+            const mixSlidersSection = document.getElementById('mix-sliders-section'); // Fieldset for mix sliders
+            const lcoeSliderSection = document.getElementById('lcoe-slider-section'); // Fieldset for LCOE slider
+
+            // Removed runModelBtn as it's no longer needed
+            // const runModelBtn = document.getElementById('runModelBtn');
 
             try {
                 // Load world GeoJSON data for landmass clipping
@@ -182,6 +516,7 @@
                     })
                 );
 
+                statusMessage.textContent = "Fetching map and energy data...";
                 const [geoJson, ...csvTexts] = await Promise.all([geoJsonPromise, ...csvPromises]);
                 worldGeoJSON = geoJson;
 
@@ -191,17 +526,16 @@
                     if (index === 0) { // For the first file, directly assign
                         dispatchData = parsed;
                     } else { // For subsequent files, append, skipping header if present
-                        // Assuming all files have the same header and we only need it from the first
-                        // If files might have different headers or no headers, more robust logic is needed
                         dispatchData = dispatchData.concat(parsed);
                     }
                 });
 
                 if (dispatchData.length > 0) {
-                    statusMessage.textContent = `Successfully loaded ${dispatchData.length} total rows from ${csvFiles.length} files.`;
-                    slidersSection.classList.remove('hidden');
+                    statusMessage.textContent = `Successfully loaded ${dispatchData.length} total rows.`;
+                    // Show the "System Configuration & Visualization" group
+                    systemConfigGroup.classList.remove('hidden'); 
                 } else {
-                    statusMessage.textContent = 'Error: No data loaded from CSV files.';
+                    statusMessage.textContent = 'Error: No data loaded from CSV files. Check file content.';
                     return;
                 }
 
@@ -211,6 +545,7 @@
                 return;
             }
 
+            // Initialize map after data is loaded
             map = L.map('map').setView([20, 0], 2);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
@@ -222,24 +557,28 @@
             voronoiLayer.addTo(map);
             circlesLayer.addTo(map);
 
-            // Removed fileInput as it's no longer needed
-            const solarSlider = document.getElementById('solar-slider');
-            const windSlider = document.getElementById('wind-slider');
-            const batterySlider = document.getElementById('battery-slider');
-            const lcoeSlider = document.getElementById('lcoe-slider');
-            const solarValueLabel = document.getElementById('solar-value');
-            const windValueLabel = document.getElementById('wind-value');
-            const batteryValueLabel = document.getElementById('battery-value');
-            const lcoeValueLabel = document.getElementById('lcoe-value');
-            
-            const modeMixRadio = document.getElementById('mode-mix');
-            const modeLcoeRadio = document.getElementById('mode-lcoe');
-            const mixSlidersSection = document.getElementById('mix-sliders-section');
-            const lcoeSliderSection = document.getElementById('lcoe-slider-section');
-
             // Initial map update and legend addition after data is loaded
             updateMap();
             addLegend();
+
+            // Initialize Tippy.js tooltips
+            tippy('[data-tippy-content]', {
+                animation: 'scale',
+                theme: 'light-border'
+            });
+
+            // Collapse groups on load
+            document.querySelectorAll('.group-title').forEach(el => {
+                el.classList.add("collapsed");
+                const content = el.nextElementSibling;
+                content.style.display = "none";
+            });
+            // Ensure the main System Configuration group is expanded by default after load
+            const initialSystemConfigTitle = systemConfigGroup.querySelector('.group-title');
+            if (initialSystemConfigTitle) {
+                toggleGroup(initialSystemConfigTitle);
+            }
+
 
             function parseCSV(text) {
                 const lines = text.trim().split('\n');
@@ -272,6 +611,7 @@
                 updateMap();
             });
 
+            // Sliders now trigger updateMap directly
             solarSlider.addEventListener('input', updateMap);
             windSlider.addEventListener('input', updateMap);
             batterySlider.addEventListener('input', updateMap);
