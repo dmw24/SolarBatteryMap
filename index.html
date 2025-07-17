@@ -298,9 +298,8 @@
                     const color = getColorForCF(capacityFactor);
 
                     const circle = L.circleMarker([lat, lon], {
-                        radius: 3, // Smaller radius
-                        color: '#ffffff', // White border
-                        weight: 0.5,
+                        radius: 2, // Even smaller radius
+                        weight: 0, // No border
                         fillColor: color,
                         fillOpacity: 0.9
                     }).addTo(circlesLayer);
