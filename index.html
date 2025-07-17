@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Solar+Battery Dispatch Map</title>
+    <title>Global Energy System Performance Map</title>
     
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -11,7 +11,7 @@
     <!-- Leaflet.js for the map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-     crossorigin="">
+     crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
      crossorigin=""></script>
@@ -87,39 +87,42 @@
             stroke-width: 0.5;
         }
     </style>
-    
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans">
 
     <div class="container mx-auto p-4 md:p-6">
         <header class="text-center mb-6">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">Global Solar+Battery System Performance</h1>
-            <p class="text-gray-400 mt-2">Visualize system capacity factor based on solar and battery size.</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Global Energy System Performance</h1>
+            <p class="text-gray-400 mt-2">Visualize system capacity factor based on solar, wind, and battery size.</p>
         </header>
 
         <!-- Controls Section -->
         <div id="controls" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
             <div id="upload-section">
-                <label for="csv-file" class="block mb-2 text-lg font-medium text-white">1. Upload your CSV File</label>
+                <label for="csv-file" class="block mb-2 text-lg font-medium text-white">1. Upload your LCOE File</label>
                 <input type="file" id="csv-file" accept=".csv" class="block w-full text-sm text-gray-400
                   file:mr-4 file:py-2 file:px-4
                   file:rounded-full file:border-0
                   file:text-sm file:font-semibold
                   file:bg-blue-500 file:text-white
-                  hover:file:bg-blue-600 cursor-pointer">
-                <p id="status-message" class="text-gray-500 mt-2 text-sm">Please upload 'system_capacity_factors.csv'.</p>
+                  hover:file:bg-blue-600 cursor-pointer"/>
+                <p id="status-message" class="text-gray-500 mt-2 text-sm">Please upload 'system_capacity_factors_solar_wind plus LCOE.csv'.</p>
             </div>
 
             <div id="sliders-section" class="mt-6 hidden">
                  <h2 class="text-lg font-medium text-white mb-4">2. Select System Configuration</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                         <label for="solar-slider" class="block mb-2 font-medium">Solar Capacity: <span id="solar-value" class="font-bold text-blue-400">5 GW</span></label>
-                        <input type="range" id="solar-slider" min="1" max="10" value="1" class="w-full">
+                        <input type="range" id="solar-slider" min="0" max="10" value="5" class="w-full">
+                    </div>
+                    <div>
+                        <label for="wind-slider" class="block mb-2 font-medium">Wind Capacity: <span id="wind-value" class="font-bold text-blue-400">2 GW</span></label>
+                        <input type="range" id="wind-slider" min="0" max="4" value="2" class="w-full">
                     </div>
                     <div>
                         <label for="battery-slider" class="block mb-2 font-medium">Battery Capacity: <span id="battery-value" class="font-bold text-blue-400">8 GWh</span></label>
-                        <input type="range" id="battery-slider" min="0" max="15" value="0" class="w-full">
+                        <input type="range" id="battery-slider" min="0" max="15" value="8" class="w-full">
                     </div>
                 </div>
             </div>
@@ -158,8 +161,7 @@
                 subdomains: 'abcd',
                 maxZoom: 19
             }).addTo(map);
-
-            // --- FIX: Ensure map tiles are visible behind the SVG overlay ---
+            
             map.getPane('tilePane').style.zIndex = 200;
 
             // Add layers in order: heatmap first, then circles
@@ -168,8 +170,10 @@
 
             const fileInput = document.getElementById('csv-file');
             const solarSlider = document.getElementById('solar-slider');
+            const windSlider = document.getElementById('wind-slider');
             const batterySlider = document.getElementById('battery-slider');
             const solarValueLabel = document.getElementById('solar-value');
+            const windValueLabel = document.getElementById('wind-value');
             const batteryValueLabel = document.getElementById('battery-value');
             const statusMessage = document.getElementById('status-message');
             const slidersSection = document.getElementById('sliders-section');
@@ -218,31 +222,35 @@
             });
 
             solarSlider.addEventListener('input', updateMap);
+            windSlider.addEventListener('input', updateMap);
             batterySlider.addEventListener('input', updateMap);
             map.on('moveend', updateMap);
-
 
             function updateMap() {
                 if (dispatchData.length === 0 || !map || !worldGeoJSON) return;
 
                 solarValueLabel.textContent = `${solarSlider.value} GW`;
+                windValueLabel.textContent = `${windSlider.value} GW`;
                 batteryValueLabel.textContent = `${batterySlider.value} GWh`;
 
                 circlesLayer.clearLayers();
                 d3.select(voronoiLayer._container).selectAll("*").remove(); // Clear SVG layer
 
                 const selectedSolar = parseInt(solarSlider.value);
+                const selectedWind = parseInt(windSlider.value);
                 const selectedBattery = parseInt(batterySlider.value);
 
                 const filteredData = dispatchData.filter(row => 
-                    row.Solar_GW === selectedSolar && row.Battery_GWh === selectedBattery
+                    row.Solar_GW === selectedSolar &&
+                    row.Wind_GW === selectedWind &&
+                    row.Battery_GWh === selectedBattery
                 );
 
                 if (filteredData.length === 0) {
-                    statusMessage.textContent = `No data found for ${selectedSolar} GW Solar and ${selectedBattery} GWh Battery.`;
+                    statusMessage.textContent = `No data found for the selected configuration.`;
                     return;
                 }
-                statusMessage.textContent = `Displaying ${filteredData.length} locations for ${selectedSolar} GW Solar and ${selectedBattery} GWh Battery.`;
+                statusMessage.textContent = `Displaying ${filteredData.length} locations for ${selectedSolar} GW Solar, ${selectedWind} GW Wind, and ${selectedBattery} GWh Battery.`;
                 
                 const mapPoints = [];
                 const associatedData = [];
@@ -272,17 +280,9 @@
 
                 if (mapPoints.length > 1) {
                     const delaunay = d3.Delaunay.from(mapPoints);
-                    
-                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                    mapPoints.forEach(p => {
-                        minX = Math.min(minX, p[0]);
-                        minY = Math.min(minY, p[1]);
-                        maxX = Math.max(maxX, p[0]);
-                        maxY = Math.max(maxY, p[1]);
-                    });
                     const mapSize = map.getSize();
                     const buffer = Math.max(mapSize.x, mapSize.y);
-                    const voronoiBounds = [minX - buffer, minY - buffer, maxX + buffer, maxY + buffer];
+                    const voronoiBounds = [-buffer, -buffer, mapSize.x + buffer, mapSize.y + buffer];
                     const voronoi = delaunay.voronoi(voronoiBounds);
                     
                     svg.append("g")
