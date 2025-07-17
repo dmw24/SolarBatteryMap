@@ -159,6 +159,9 @@
                 maxZoom: 19
             }).addTo(map);
 
+            // --- FIX: Ensure map tiles are visible behind the SVG overlay ---
+            map.getPane('tilePane').style.zIndex = 200;
+
             // Add layers in order: heatmap first, then circles
             voronoiLayer.addTo(map);
             circlesLayer.addTo(map);
@@ -244,7 +247,6 @@
                 const mapPoints = [];
                 const associatedData = [];
 
-                // Use ALL points for the Voronoi calculation for a complete global diagram
                 filteredData.forEach(row => {
                     const { lat, lon } = parseLocation(row.Location);
                     if (lat !== null && lon !== null) {
@@ -261,8 +263,6 @@
                 }});
                 const path = d3.geoPath().projection(transform);
 
-                // --- VORONOI HEATMAP WITH CLIPPING ---
-                // 1. Define the clipping path from the world GeoJSON
                 svg.append("defs")
                    .append("clipPath")
                    .attr("id", "clip-land")
@@ -270,14 +270,21 @@
                    .datum(worldGeoJSON)
                    .attr("d", path);
 
-                // 2. Create the Voronoi diagram
                 if (mapPoints.length > 1) {
-                    // --- FIX: Use map dimensions for the Voronoi bounding box ---
-                    const mapSize = map.getSize();
                     const delaunay = d3.Delaunay.from(mapPoints);
-                    const voronoi = delaunay.voronoi([0, 0, mapSize.x, mapSize.y]);
                     
-                    // 3. Draw the Voronoi cells, applying the clipping path
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                    mapPoints.forEach(p => {
+                        minX = Math.min(minX, p[0]);
+                        minY = Math.min(minY, p[1]);
+                        maxX = Math.max(maxX, p[0]);
+                        maxY = Math.max(maxY, p[1]);
+                    });
+                    const mapSize = map.getSize();
+                    const buffer = Math.max(mapSize.x, mapSize.y);
+                    const voronoiBounds = [minX - buffer, minY - buffer, maxX + buffer, maxY + buffer];
+                    const voronoi = delaunay.voronoi(voronoiBounds);
+                    
                     svg.append("g")
                        .attr("clip-path", "url(#clip-land)")
                        .selectAll("path")
@@ -298,7 +305,7 @@
                     const color = getColorForCF(capacityFactor);
 
                     const circle = L.circleMarker([lat, lon], {
-                        radius: 2, // Even smaller radius
+                        radius: 2, 
                         weight: 0, // No border
                         fillColor: color,
                         fillOpacity: 0.9
@@ -328,11 +335,11 @@
 
             function getColorForCF(cf) {
                 const colors = [
-                    { p: 0.0,  color: { r: 0,   g: 0,   b: 255 } }, // Blue
-                    { p: 0.25, color: { r: 0,   g: 255, b: 255 } }, // Cyan
-                    { p: 0.5,  color: { r: 0,   g: 255, b: 0 } },   // Green
-                    { p: 0.75, color: { r: 255, g: 255, b: 0 } },   // Yellow
-                    { p: 1.0,  color: { r: 255, g: 0,   b: 0 } }    // Red
+                    { p: 0.0,  color: { r: 0,   g: 0,   b: 255 } },   // Blue
+                    { p: 0.3,  color: { r: 0,   g: 255, b: 0 } },   // Green
+                    { p: 0.65, color: { r: 255, g: 165, b: 0 } },   // Orange
+                    { p: 0.8,  color: { r: 255, g: 0,   b: 0 } },   // Bright Red
+                    { p: 1.0,  color: { r: 139, g: 0,   b: 0 } }    // Darker Red
                 ];
 
                 if (cf <= 0) return `rgb(${colors[0].color.r}, ${colors[0].color.g}, ${colors[0].color.b})`;
