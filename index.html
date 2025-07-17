@@ -126,16 +126,16 @@
                 <div id="mix-sliders-section">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
-                            <label for="solar-slider" class="block mb-2 font-medium">Solar Capacity: <span id="solar-value" class="font-bold text-blue-400">5 GW</span></label>
-                            <input type="range" id="solar-slider" min="0" max="10" value="5" class="w-full">
+                            <label for="solar-slider" class="block mb-2 font-medium">Solar Capacity: <span id="solar-value" class="font-bold text-blue-400">1 GW</span></label>
+                            <input type="range" id="solar-slider" min="0" max="10" value="1" class="w-full">
                         </div>
                         <div>
-                            <label for="wind-slider" class="block mb-2 font-medium">Wind Capacity: <span id="wind-value" class="font-bold text-blue-400">2 GW</span></label>
-                            <input type="range" id="wind-slider" min="0" max="4" value="2" class="w-full">
+                            <label for="wind-slider" class="block mb-2 font-medium">Wind Capacity: <span id="wind-value" class="font-bold text-blue-400">0 GW</span></label>
+                            <input type="range" id="wind-slider" min="0" max="4" value="0" class="w-full">
                         </div>
                         <div>
-                            <label for="battery-slider" class="block mb-2 font-medium">Battery Capacity: <span id="battery-value" class="font-bold text-blue-400">8 GWh</span></label>
-                            <input type="range" id="battery-slider" min="0" max="15" value="8" class="w-full">
+                            <label for="battery-slider" class="block mb-2 font-medium">Battery Capacity: <span id="battery-value" class="font-bold text-blue-400">0 GWh</span></label>
+                            <input type="range" id="battery-slider" min="0" max="15" value="0" class="w-full">
                         </div>
                     </div>
                 </div>
@@ -290,23 +290,36 @@
                     const maxLcoe = parseInt(lcoeSlider.value);
                     lcoeValueLabel.textContent = `$${maxLcoe} / MWh`;
                     
+                    const allLocations = new Set(dispatchData.map(row => row.Location));
                     const bestConfigs = new Map();
+
+                    // Initialize bestConfigs with placeholder for all locations
+                    allLocations.forEach(location => {
+                        bestConfigs.set(location, {
+                            Location: location,
+                            System_Capacity_Factor: 0, // Default to 0% CF
+                            LCOE_USD_per_MWh: 'N/A',   // Default to N/A LCOE
+                            Solar_GW: 'N/A',           // Default to N/A for mix
+                            Wind_GW: 'N/A',
+                            Battery_GWh: 'N/A'
+                        });
+                    });
+
+                    // Iterate through data to find valid configurations
                     for (const row of dispatchData) {
-                        if (row.LCOE_USD_per_MWh <= maxLcoe) {
+                        if (typeof row.LCOE_USD_per_MWh === 'number' && row.LCOE_USD_per_MWh <= maxLcoe) {
                             const location = row.Location;
-                            if (!bestConfigs.has(location) || row.System_Capacity_Factor > bestConfigs.get(location).System_Capacity_Factor) {
+                            // Update only if it's a better CF or if the current entry is a placeholder (N/A LCOE)
+                            const currentBest = bestConfigs.get(location);
+                            if (currentBest.LCOE_USD_per_MWh === 'N/A' || row.System_Capacity_Factor > currentBest.System_Capacity_Factor) {
                                 bestConfigs.set(location, row);
                             }
                         }
                     }
                     dataToDisplay = Array.from(bestConfigs.values());
-                    statusMessage.textContent = `Displaying best CF for ${dataToDisplay.length} locations under $${maxLcoe}/MWh.`;
+                    statusMessage.textContent = `Displaying best CF for ${dataToDisplay.length} locations under $${maxLcoe}/MWh (including N/A).`;
                 }
 
-                if (dataToDisplay.length === 0) {
-                    statusMessage.textContent = `No data found for the selected configuration.`;
-                    return;
-                }
                 
                 const mapPoints = [];
                 const associatedData = [];
@@ -328,7 +341,7 @@
 
                 svg.append("defs").append("clipPath").attr("id", "clip-land").append("path").datum(worldGeoJSON).attr("d", path);
 
-                if (mapPoints.length > 1) {
+                if (mapPoints.length > 1) { // Ensure there's enough data for Delaunay/Voronoi
                     const delaunay = d3.Delaunay.from(mapPoints);
                     const mapSize = map.getSize();
                     const buffer = Math.max(mapSize.x, mapSize.y);
@@ -340,7 +353,18 @@
                        .attr("d", (d, i) => voronoi.renderCell(i))
                        .style("fill", (d, i) => getColorForCF(associatedData[i].System_Capacity_Factor))
                        .style("fill-opacity", 0.6).attr("class", "voronoi-cell");
+                } else if (mapPoints.length === 1) {
+                    // Handle case with only one point to avoid Delaunay error
+                    // Draw a single circle or small area for the point
+                    svg.append("g").attr("clip-path", "url(#clip-land)").append("circle")
+                       .attr("cx", mapPoints[0][0])
+                       .attr("cy", mapPoints[0][1])
+                       .attr("r", 10) // A small radius for visibility
+                       .style("fill", getColorForCF(associatedData[0].System_Capacity_Factor))
+                       .style("fill-opacity", 0.6)
+                       .attr("class", "voronoi-cell");
                 }
+
 
                 dataToDisplay.forEach(row => {
                     const { lat, lon } = parseLocation(row.Location);
@@ -350,17 +374,23 @@
                     
                     let tooltipContent;
                     if (currentMode === 'lcoe') {
+                        // Handle N/A for LCOE and mix components
+                        const displayLcoe = typeof row.LCOE_USD_per_MWh === 'number' ? `$${row.LCOE_USD_per_MWh.toFixed(2)}` : row.LCOE_USD_per_MWh;
+                        const displaySolar = typeof row.Solar_GW === 'number' ? `${row.Solar_GW} GW` : row.Solar_GW;
+                        const displayWind = typeof row.Wind_GW === 'number' ? `${row.Wind_GW} GW` : row.Wind_GW;
+                        const displayBattery = typeof row.Battery_GWh === 'number' ? `${row.Battery_GWh} GWh` : row.Battery_Gwh;
+
                         tooltipContent = `
                             <div style="font-family: sans-serif; text-align: left;">
                                 <strong>Location:</strong> ${lat.toFixed(2)}, ${lon.toFixed(2)}<br>
                                 <hr style="margin: 3px 0; border-color: #4b5563;">
                                 <strong>Best CF:</strong> ${(row.System_Capacity_Factor * 100).toFixed(2)}%<br>
-                                <strong>LCOE:</strong> $${row.LCOE_USD_per_MWh.toFixed(2)}<br>
+                                <strong>LCOE:</strong> ${displayLcoe}<br>
                                 <hr style="margin: 3px 0; border-color: #4b5563;">
                                 <strong>Optimal Mix:</strong><br>
-                                &nbsp;&nbsp;Solar: ${row.Solar_GW} GW<br>
-                                &nbsp;&nbsp;Wind: ${row.Wind_GW} GW<br>
-                                &nbsp;&nbsp;Battery: ${row.Battery_GWh} GWh
+                                &nbsp;&nbsp;Solar: ${displaySolar}<br>
+                                &nbsp;&nbsp;Wind: ${displayWind}<br>
+                                &nbsp;&nbsp;Battery: ${displayBattery}
                             </div>`;
                     } else {
                          tooltipContent = `
